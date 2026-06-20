@@ -2,29 +2,29 @@ frontend/
 ├── app/
 │ ├── api/
 │ │ └── chat/
-│ │ └── route.ts # Vercel AI SDK ka backend route (Streaming response ke liye)
-│ ├── globals.css # Tailwind/Shadcn ki global styles
+│ │ └── route.ts # Vercel AI SDK backend route (For streaming responses)
+│ ├── globals.css # Tailwind/Shadcn global styles
 │ ├── layout.tsx # Main layout file
-│ └── page.tsx # Main chat page (Yahan aapka chatbot render hoga)
+│ └── page.tsx # Main chat page (The chatbot will render here)
 │
 ├── components/
-│ ├── ui/ # Yahan Shadcn UI ke auto-generated components aayenge (button, input, etc.)
-│ ├── chat/ # Chatbot se related custom components
-│ │ ├── chat-interface.tsx # Pura chat layout (messages + input ko combine karega)
-│ │ ├── chat-message.tsx # Single message bubble (AI aur User messages ke UI ke liye)
-│ │ ├── chat-input.tsx # Message type karne wala textarea aur send button
-│ │ └── chat-list.tsx # Sabhi messages ki list dikhane ke liye
-│ └── shared/ # Header, Sidebar, ya Footer jaise common components
+│ ├── ui/ # Auto-generated Shadcn UI components will go here (button, input, etc.)
+│ ├── chat/ # Custom components related to the chatbot
+│ │ ├── chat-interface.tsx # Full chat layout (combines messages + input)
+│ │ ├── chat-message.tsx # Single message bubble (UI for AI and User messages)
+│ │ ├── chat-input.tsx # Textarea for typing messages and the send button
+│ │ └── chat-list.tsx # To display the list of all messages
+│ └── shared/ # Common components like Header, Sidebar, or Footer
 │
 ├── lib/
-│ ├── utils.ts # Shadcn ka utility function (e.g., `cn` function jo classes merge karta hai)
-│ └── ai/ # System prompts, tools, ya custom AI logic agar kuch ho toh
+│ ├── utils.ts # Shadcn utility function (e.g., `cn` function that merges classes)
+│ └── ai/ # System prompts, tools, or any custom AI logic
 │
 ├── hooks/
-│ └── use-chat-scroll.ts # (Optional) Auto-scroll to bottom ke liye custom hook
+│ └── use-chat-scroll.ts # (Optional) Custom hook for auto-scrolling to the bottom
 │
-├── public/ # Images, icons aur dusre static assets
-├── tailwind.config.ts # Tailwind configuration (Shadcn ke according setup)
-├── components.json # Shadcn UI ki configuration file
+├── public/ # Images, icons, and other static assets
+├── tailwind.config.ts # Tailwind configuration (Setup according to Shadcn)
+├── components.json # Shadcn UI configuration file
 ├── tsconfig.json # TypeScript settings
 └── package.json # Project dependencies
