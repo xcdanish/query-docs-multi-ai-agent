@@ -9,11 +9,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const [checking, setChecking] = useState(true);
 
     useEffect(() => {
-        if (!isAuthenticated()) {
-            router.replace("/login");
-        } else {
-            setChecking(false);
-        }
+        Promise.resolve().then(() => {
+            if (!isAuthenticated()) {
+                router.replace("/login");
+            } else {
+                setChecking(false);
+            }
+        });
     }, [router]);
 
     if (checking) {

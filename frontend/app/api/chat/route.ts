@@ -1,42 +1,68 @@
-import { getToken } from "@/lib/auth";
+import { cookies } from "next/headers";
+import { fetchApi } from "@/lib/api-client";
+import { API_URLS } from "@/lib/api-urls";
 
 export async function POST(req: Request) {
     const { messages, chatId } = await req.json();
-    const token = getToken();
+    const cookieStore = await cookies();
+    const token = cookieStore.get("auth_token")?.value;
 
     // Last user message
     const lastMessage = messages[messages.length - 1]?.content ?? "";
 
-    // Call FastAPI backend — swap this URL with your real AI endpoint later
-    // For now, stream a placeholder response character by character
-    const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+    // Common options for fetchApi inside this server context
+    const apiOptions = token ? { token } : {};
 
-    // Try to call backend streaming endpoint if it exists
+    // 1. Save user message to the database
+    if (lastMessage) {
+        try {
+            await fetchApi(API_URLS.messages.create(chatId), {
+                method: "POST",
+                bodyData: { role: "user", content: lastMessage },
+                ...apiOptions,
+            });
+        } catch (error) {
+            console.error("Failed to save user message:", error);
+        }
+    }
+
+    // 2. Try to call backend streaming endpoint if it exists
     try {
-        const backendRes = await fetch(`${BACKEND_URL}/chat/stream`, {
+        // Here we use native fetch directly because we need the raw response stream.
+        // fetchApi is designed to process JSON normally, so we handle the stream case.
+        // Actually fetchApi handles chunked Transfer-Encoding, but native fetch is safer for pure streams here.
+        const response = await fetchApi(API_URLS.chat.stream, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
-            body: JSON.stringify({ message: lastMessage, chat_id: chatId }),
+            bodyData: { message: lastMessage, chat_id: chatId },
+            ...apiOptions,
         });
 
-        if (backendRes.ok && backendRes.body) {
-            return new Response(backendRes.body, {
+        if (response instanceof Response && response.ok && response.body) {
+            return new Response(response.body, {
                 headers: { "Content-Type": "text/plain; charset=utf-8" },
             });
         }
     } catch {
-        // Backend streaming not available yet — use placeholder
+        // Backend streaming not available yet — proceed to placeholder
     }
 
-    // Placeholder streaming response (remove when backend AI is ready)
+    // 3. Placeholder streaming response
     const placeholderText =
         `I'm QueryDocs AI, your intelligent document assistant! 🤖\n\n` +
         `You asked: "${lastMessage}"\n\n` +
         `I can help you query and analyze your documents once the AI backend is fully configured. ` +
         `Stay tuned — the full AI integration is coming soon!`;
+
+    // Save AI response immediately to the backend as a placeholder
+    try {
+        await fetchApi(API_URLS.messages.create(chatId), {
+            method: "POST",
+            bodyData: { role: "assistant", content: placeholderText, agent_name: "QueryDocs AI" },
+            ...apiOptions,
+        });
+    } catch (error) {
+        console.error("Failed to save AI message:", error);
+    }
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream({

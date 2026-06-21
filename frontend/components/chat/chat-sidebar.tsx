@@ -29,6 +29,8 @@ import {
     Sun,
     Moon,
     Zap,
+    MoreHorizontal,
+    Pencil,
 } from "lucide-react";
 
 interface ChatSidebarProps {
@@ -51,27 +53,16 @@ export function ChatSidebar({
     const [currentUser, setCurrentUser] = useState<UserOut | null>(null);
 
     useEffect(() => {
-        loadChats();
-        loadUser();
+        getChatsApi()
+            .then(setChats)
+            .catch(() => toast.error("Failed to load chats"));
+
+        getMeApi()
+            .then(setCurrentUser)
+            .catch(() => {
+                /* silent */
+            });
     }, []);
-
-    async function loadChats() {
-        try {
-            const data = await getChatsApi();
-            setChats(data);
-        } catch {
-            toast.error("Failed to load chats");
-        }
-    }
-
-    async function loadUser() {
-        try {
-            const user = await getMeApi();
-            setCurrentUser(user);
-        } catch {
-            /* silent */
-        }
-    }
 
     async function handleNewChat() {
         setCreating(true);
@@ -84,6 +75,11 @@ export function ChatSidebar({
         } finally {
             setCreating(false);
         }
+    }
+
+    function handleRenameChat(e: React.MouseEvent, chatId: string) {
+        e.stopPropagation();
+        toast.info("Rename feature coming soon!");
     }
 
     async function handleDeleteChat(e: React.MouseEvent, chatId: string) {
@@ -213,13 +209,34 @@ export function ChatSidebar({
                                     {!isCollapsed && <span className="truncate">{chat.title}</span>}
                                 </div>
                                 {!isCollapsed && (
-                                    <button
-                                        onClick={(e) => handleDeleteChat(e, chat.id)}
-                                        title="Delete chat"
-                                        className="ml-1 shrink-0 rounded p-0.5 text-[#bbb] opacity-0 transition-all group-hover:opacity-100 hover:text-red-500"
-                                    >
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                    </button>
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger
+                                            onClick={(e) => e.stopPropagation()}
+                                            title="Options"
+                                            className="ml-1 shrink-0 rounded p-0.5 text-[#bbb] opacity-0 transition-all outline-none group-hover:opacity-100 hover:bg-[#d5d5d5] hover:text-[#333] dark:hover:bg-[#333] dark:hover:text-[#f0f0f0]"
+                                        >
+                                            <MoreHorizontal className="h-4 w-4" />
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent
+                                            align="end"
+                                            className="w-36 rounded-xl border-[#e5e5e5] bg-white shadow-md dark:border-[#333] dark:bg-[#1a1a1a]"
+                                        >
+                                            <DropdownMenuItem
+                                                onClick={(e) => handleRenameChat(e, chat.id)}
+                                                className="flex cursor-pointer items-center gap-2 text-[13px] text-[#444] hover:bg-[#f5f5f5] hover:text-[#111] dark:text-[#ccc] dark:hover:bg-[#222] dark:hover:text-white"
+                                            >
+                                                <Pencil className="h-3.5 w-3.5" />
+                                                Rename
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                                onClick={(e) => handleDeleteChat(e, chat.id)}
+                                                className="flex cursor-pointer items-center gap-2 text-[13px] text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                                            >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                                Delete
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
                                 )}
                             </div>
                         ))

@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { ChatMessage, Message } from "./chat-message";
 import { ChatInput } from "./chat-input";
 import { getToken } from "@/lib/auth";
-import { ChatOut } from "@/lib/api";
+import { ChatOut, getMessagesApi } from "@/lib/api";
 import { Zap, FileText, BarChart2, GitCompare, Table } from "lucide-react";
 
 interface ChatInterfaceProps {
@@ -21,9 +21,17 @@ const SUGGESTIONS = [
 export function ChatInterface({ activeChat }: ChatInterfaceProps) {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState("");
+    const [files, setFiles] = useState<File[]>([]);
     const [isStreaming, setIsStreaming] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
+    const [prevChatId, setPrevChatId] = useState<string | undefined>(undefined);
+
+    if (activeChat?.id !== prevChatId) {
+        setPrevChatId(activeChat?.id);
+        setMessages([]);
+        setInput("");
+    }
 
     useEffect(() => {
         if (scrollRef.current) {
@@ -32,12 +40,22 @@ export function ChatInterface({ activeChat }: ChatInterfaceProps) {
     }, [messages]);
 
     useEffect(() => {
-        setMessages([]);
-        setInput("");
+        if (activeChat?.id) {
+            getMessagesApi(activeChat.id)
+                .then((data) => {
+                    const mappedMessages = data.map((m) => ({
+                        id: m.id,
+                        role: m.role as "user" | "assistant" | "system",
+                        content: m.content,
+                    }));
+                    setMessages(mappedMessages);
+                })
+                .catch(console.error);
+        }
     }, [activeChat?.id]);
 
     async function handleSend() {
-        if (!input.trim() || !activeChat || isStreaming) return;
+        if ((!input.trim() && files.length === 0) || !activeChat || isStreaming) return;
 
         const userMessage: Message = {
             id: crypto.randomUUID(),
@@ -48,6 +66,7 @@ export function ChatInterface({ activeChat }: ChatInterfaceProps) {
         const allMessages = [...messages, userMessage];
         setMessages(allMessages);
         setInput("");
+        setFiles([]);
         setIsStreaming(true);
 
         const aiMessageId = crypto.randomUUID();
@@ -101,7 +120,7 @@ export function ChatInterface({ activeChat }: ChatInterfaceProps) {
     if (!activeChat) {
         return (
             <div className="flex flex-1 flex-col items-center justify-center bg-[#fafafa] px-4 pb-16 dark:bg-[#111111]">
-                <div className="flex w-full max-w-2xl flex-col items-center">
+                <div className="flex w-full max-w-3xl flex-col items-center">
                     {/* Hero */}
                     <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#10a37f] shadow-lg shadow-[#10a37f]/20">
                         <Zap className="h-6 w-6 text-white" />
@@ -135,6 +154,8 @@ export function ChatInterface({ activeChat }: ChatInterfaceProps) {
                             onSubmit={() => {}}
                             loading={false}
                             disabled={true}
+                            files={files}
+                            onFilesChange={setFiles}
                         />
                     </div>
                 </div>
@@ -153,7 +174,7 @@ export function ChatInterface({ activeChat }: ChatInterfaceProps) {
 
             {/* Messages */}
             <div ref={scrollRef} className="flex-1 overflow-y-auto">
-                <div className="mx-auto max-w-2xl py-8">
+                <div className="mx-auto max-w-3xl py-8">
                     {messages.length === 0 ? (
                         <div className="py-20 text-center">
                             <p className="text-sm text-[#aaa] dark:text-[#444]">
@@ -179,12 +200,14 @@ export function ChatInterface({ activeChat }: ChatInterfaceProps) {
             </div>
 
             {/* Input */}
-            <div className="mx-auto w-full max-w-2xl">
+            <div className="mx-auto w-full max-w-3xl">
                 <ChatInput
                     input={input}
                     onInputChange={setInput}
                     onSubmit={handleSend}
                     loading={isStreaming}
+                    files={files}
+                    onFilesChange={setFiles}
                 />
             </div>
         </div>
