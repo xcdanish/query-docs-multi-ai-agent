@@ -4,11 +4,13 @@ import { useState, useRef, useEffect } from "react";
 import { ChatMessage, Message } from "./chat-message";
 import { ChatInput } from "./chat-input";
 import { getToken } from "@/lib/auth";
-import { ChatOut } from "@/lib/api";
+import { ChatOut, getMessagesApi, uploadAssetApi, attachAssetToChatApi, createChatApi } from "@/lib/api";
 import { Zap, FileText, BarChart2, GitCompare, Table } from "lucide-react";
+import { toast } from "sonner";
 
 interface ChatInterfaceProps {
     activeChat: ChatOut | null;
+    onChatCreated?: (chat: ChatOut) => void;
 }
 
 const SUGGESTIONS = [
@@ -18,12 +20,21 @@ const SUGGESTIONS = [
     { icon: Table, label: "Extract data tables" },
 ];
 
-export function ChatInterface({ activeChat }: ChatInterfaceProps) {
+export function ChatInterface({ activeChat, onChatCreated }: ChatInterfaceProps) {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState("");
+    const [files, setFiles] = useState<File[]>([]);
     const [isStreaming, setIsStreaming] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
+    const [prevChatId, setPrevChatId] = useState<string | undefined>(undefined);
+
+    if (activeChat?.id !== prevChatId) {
+        setPrevChatId(activeChat?.id);
+        setMessages([]);
+        setInput("");
+        setFiles([]);
+    }
 
     useEffect(() => {
         if (scrollRef.current) {
@@ -32,23 +43,85 @@ export function ChatInterface({ activeChat }: ChatInterfaceProps) {
     }, [messages]);
 
     useEffect(() => {
-        setMessages([]);
-        setInput("");
+        if (activeChat?.id) {
+            getMessagesApi(activeChat.id)
+                .then((data) => {
+                    const mappedMessages = data.map((m) => {
+                        let parsedAssets = undefined;
+                        if (m.metadata_json && m.metadata_json.assets) {
+                            parsedAssets = m.metadata_json.assets as { id: string; file_name: string; file_type: string; }[];
+                        }
+                        return {
+                            id: m.id,
+                            role: m.role as "user" | "assistant" | "system",
+                            content: m.content,
+                            assets: parsedAssets,
+                        };
+                    });
+                    setMessages(mappedMessages);
+                })
+                .catch(console.error);
+        }
     }, [activeChat?.id]);
 
     async function handleSend() {
-        if (!input.trim() || !activeChat || isStreaming) return;
+        if ((!input.trim() && files.length === 0) || isStreaming) return;
+
+        setIsStreaming(true);
+
+        let currentChat = activeChat;
+        if (!currentChat) {
+            try {
+                const newTitle = input.trim() ? input.trim().slice(0, 30) : "New Chat";
+                currentChat = await createChatApi(newTitle);
+                window.history.replaceState({}, '', `/chat?id=${currentChat.id}`);
+                window.dispatchEvent(new Event('chatCreated'));
+                if (onChatCreated) onChatCreated(currentChat);
+            } catch (error) {
+                console.error("Failed to create chat", error);
+                toast.error("Failed to create chat. Please try again.");
+                setIsStreaming(false);
+                return;
+            }
+        }
+
+        // Upload files first
+        let uploadedFiles = 0;
+        const uploadedAssetsData: { id: string, file_name: string, file_type: string }[] = [];
+        
+        if (files.length > 0) {
+            try {
+                for (const file of files) {
+                    const assetOut = await uploadAssetApi(file);
+                    await attachAssetToChatApi(currentChat.id, assetOut.id);
+                    uploadedAssetsData.push({
+                        id: assetOut.id,
+                        file_name: assetOut.file_name,
+                        file_type: assetOut.file_type
+                    });
+                    uploadedFiles++;
+                }
+            } catch (error) {
+                console.error("File upload failed", error);
+                toast.error("Failed to upload files. Please try again.");
+                setIsStreaming(false);
+                return;
+            }
+        }
+
+        const finalInput = input || (uploadedFiles > 0 ? `[Attached ${uploadedFiles} file(s)]` : "");
 
         const userMessage: Message = {
             id: crypto.randomUUID(),
             role: "user",
-            content: input.trim(),
+            content: finalInput,
+            ...(uploadedAssetsData.length > 0 ? { assets: uploadedAssetsData } : {})
         };
 
         const allMessages = [...messages, userMessage];
         setMessages(allMessages);
         setInput("");
-        setIsStreaming(true);
+        setFiles([]);
 
         const aiMessageId = crypto.randomUUID();
         setMessages((prev) => [...prev, { id: aiMessageId, role: "assistant", content: "" }]);
@@ -63,7 +136,11 @@ export function ChatInterface({ activeChat }: ChatInterfaceProps) {
                     "Content-Type": "application/json",
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
-                body: JSON.stringify({ messages: allMessages, chatId: activeChat.id }),
+                body: JSON.stringify({ 
+                    messages: allMessages, 
+                    chatId: currentChat.id,
+                    metadata_json: uploadedAssetsData.length > 0 ? { assets: uploadedAssetsData } : undefined
+                }),
                 signal: abortControllerRef.current.signal,
             });
 
@@ -101,7 +178,7 @@ export function ChatInterface({ activeChat }: ChatInterfaceProps) {
     if (!activeChat) {
         return (
             <div className="flex flex-1 flex-col items-center justify-center bg-[#fafafa] px-4 pb-16 dark:bg-[#111111]">
-                <div className="flex w-full max-w-2xl flex-col items-center">
+                <div className="flex w-full max-w-3xl flex-col items-center">
                     {/* Hero */}
                     <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#10a37f] shadow-lg shadow-[#10a37f]/20">
                         <Zap className="h-6 w-6 text-white" />
@@ -132,9 +209,10 @@ export function ChatInterface({ activeChat }: ChatInterfaceProps) {
                         <ChatInput
                             input={input}
                             onInputChange={setInput}
-                            onSubmit={() => {}}
-                            loading={false}
-                            disabled={true}
+                            onSubmit={handleSend}
+                            loading={isStreaming}
+                            files={files}
+                            onFilesChange={setFiles}
                         />
                     </div>
                 </div>
@@ -153,7 +231,7 @@ export function ChatInterface({ activeChat }: ChatInterfaceProps) {
 
             {/* Messages */}
             <div ref={scrollRef} className="flex-1 overflow-y-auto">
-                <div className="mx-auto max-w-2xl py-8">
+                <div className="mx-auto max-w-3xl py-8">
                     {messages.length === 0 ? (
                         <div className="py-20 text-center">
                             <p className="text-sm text-[#aaa] dark:text-[#444]">
@@ -179,12 +257,14 @@ export function ChatInterface({ activeChat }: ChatInterfaceProps) {
             </div>
 
             {/* Input */}
-            <div className="mx-auto w-full max-w-2xl">
+            <div className="mx-auto w-full max-w-3xl">
                 <ChatInput
                     input={input}
                     onInputChange={setInput}
                     onSubmit={handleSend}
                     loading={isStreaming}
+                    files={files}
+                    onFilesChange={setFiles}
                 />
             </div>
         </div>

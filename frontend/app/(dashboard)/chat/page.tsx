@@ -17,7 +17,10 @@ export default function ChatPage() {
                 isCollapsed={isCollapsed}
                 onToggleCollapse={() => setIsCollapsed((p) => !p)}
             />
-            <ChatInterface activeChat={activeChat} />
+            <ChatInterface 
+                activeChat={activeChat} 
+                onChatCreated={setActiveChat}
+            />
         </div>
     );
 }
