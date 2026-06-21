@@ -219,3 +219,5 @@ __marimo__/
 # Uploaded Assets
 backend/uploads/assets/*
 !backend/uploads/assets/.gitkeep
+
+docs/*
