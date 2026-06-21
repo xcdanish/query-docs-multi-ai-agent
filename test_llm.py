@@ -16,3 +16,13 @@ if __name__ == "__main__":
         print(f"Response: {response.content}")
     except Exception as e:
         print(f"Failed: {e}")
+
+    print("\nTesting get_llm('supervisor')...")
+    try:
+        llm = get_llm("supervisor")
+        print(f"Success! Acquired model: {llm.model}")
+        print("Invoking model...")
+        response = llm.invoke("Say hello world")
+        print(f"Response: {response.content}")
+    except Exception as e:
+        print(f"Failed: {e}")

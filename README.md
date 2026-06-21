@@ -34,21 +34,27 @@ Since Ollama runs inside a Docker container, run these commands from your host t
 docker exec -it query-docs-ollama ollama list
 ```
 
-### Pull Coder model (1.5B) - *For Engineering Agent*
-```bash
-docker exec -it query-docs-ollama ollama pull qwen2.5-coder:1.5b
-```
+### 1. Active Models (Already Pulled & Used)
 
-### Pull Chat model (1.5B) - *For Supervisor, Research, and Knowledge Agents*
-```bash
-docker exec -it query-docs-ollama ollama pull qwen2.5:1.5b
-```
+* **qwen2.5-coder:1.5b** - *For Engineering Agent*
+  ```bash
+  docker exec -it query-docs-ollama ollama pull qwen2.5-coder:1.5b
+  ```
+* **qwen3:8b** - *For Supervisor, Research, and Knowledge Agents*
+  ```bash
+  docker exec -it query-docs-ollama ollama pull qwen3:8b
+  ```
+* **nomic-embed-text:latest** - *For RAG & Document Embeddings*
+  ```bash
+  docker exec -it query-docs-ollama ollama pull nomic-embed-text
+  ```
 
-### Pull Embeddings model - *For RAG & Document Embeddings*
-```bash
-docker exec -it query-docs-ollama ollama pull nomic-embed-text
-```
+### 2. Future Models (To be used in the future)
 
+* **qwen2.5:1.5b** - *Optional Chat/General Model*
+  ```bash
+  docker exec -it query-docs-ollama ollama pull qwen2.5:1.5b
+  ```
 ---
 
 ## 🐍 Backend Commands

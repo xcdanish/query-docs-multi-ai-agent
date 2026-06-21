@@ -3,9 +3,9 @@ from langchain_core.language_models.chat_models import BaseChatModel
 
 # Model mapping based on the sprint requirements
 AGENT_MODEL_MAPPING = {
-    "supervisor": "qwen2.5:1.5b",
-    "knowledge": "qwen2.5:1.5b",
-    "research": "qwen2.5:1.5b",
+    "supervisor": "qwen3:8b",
+    "knowledge": "qwen3:8b",
+    "research": "qwen3:8b",
     "engineering": "qwen2.5-coder:1.5b",
 }
 
