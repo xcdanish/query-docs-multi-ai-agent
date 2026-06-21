@@ -13,6 +13,7 @@ class ChatOut(ChatBase):
     user_id: UUID
     created_at: datetime
     updated_at: datetime
+    is_empty: bool = True
 
     class Config:
         from_attributes = True

@@ -10,6 +10,7 @@ export interface Message {
     id: string;
     role: "user" | "assistant" | "system";
     content: string;
+    assets?: { id: string, file_name: string, file_type: string }[];
 }
 
 interface ChatMessageProps {
@@ -31,13 +32,32 @@ export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
     if (isUser) {
         return (
             <div className="flex justify-end px-4 py-1.5">
-                <div
-                    className={cn(
-                        "max-w-[72%] rounded-2xl rounded-br-md px-4 py-3 text-[14px] leading-relaxed whitespace-pre-wrap",
-                        "bg-[#ececec] text-[#111] dark:bg-[#1e1e1e] dark:text-[#f0f0f0]"
+                <div className="flex max-w-[72%] flex-col items-end gap-1.5">
+                    {/* Render attached files if any */}
+                    {message.assets && message.assets.length > 0 && (
+                        <div className="flex flex-wrap justify-end gap-2">
+                            {message.assets.map((asset) => (
+                                <div key={asset.id} className="flex items-center gap-2 rounded-xl bg-white p-2 pr-3 shadow-sm border border-[#e5e5e5] dark:border-[#333] dark:bg-[#222]">
+                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#f5f5f5] dark:bg-[#111]">
+                                        {/* Basic File Icon */}
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#888] dark:text-[#aaa]"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
+                                    </div>
+                                    <div className="flex max-w-[140px] flex-col overflow-hidden text-[12px]">
+                                        <span className="truncate font-medium text-[#333] dark:text-[#ccc]">{asset.file_name}</span>
+                                        <span className="text-[#888] dark:text-[#666]">{asset.file_type.split('/')[1]?.toUpperCase() || "FILE"}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     )}
-                >
-                    {message.content}
+                    <div
+                        className={cn(
+                            "rounded-2xl rounded-br-md px-4 py-3 text-[14px] leading-relaxed whitespace-pre-wrap",
+                            "bg-[#ececec] text-[#111] dark:bg-[#1e1e1e] dark:text-[#f0f0f0]"
+                        )}
+                    >
+                        {message.content}
+                    </div>
                 </div>
             </div>
         );

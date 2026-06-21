@@ -3,7 +3,7 @@ import { fetchApi } from "@/lib/api-client";
 import { API_URLS } from "@/lib/api-urls";
 
 export async function POST(req: Request) {
-    const { messages, chatId } = await req.json();
+    const { messages, chatId, metadata_json } = await req.json();
     const cookieStore = await cookies();
     const token = cookieStore.get("auth_token")?.value;
 
@@ -18,7 +18,11 @@ export async function POST(req: Request) {
         try {
             await fetchApi(API_URLS.messages.create(chatId), {
                 method: "POST",
-                bodyData: { role: "user", content: lastMessage },
+                bodyData: { 
+                    role: "user", 
+                    content: lastMessage,
+                    ...(metadata_json ? { metadata_json } : {})
+                },
                 ...apiOptions,
             });
         } catch (error) {

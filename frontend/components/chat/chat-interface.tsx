@@ -4,11 +4,13 @@ import { useState, useRef, useEffect } from "react";
 import { ChatMessage, Message } from "./chat-message";
 import { ChatInput } from "./chat-input";
 import { getToken } from "@/lib/auth";
-import { ChatOut, getMessagesApi } from "@/lib/api";
+import { ChatOut, getMessagesApi, uploadAssetApi, attachAssetToChatApi, createChatApi } from "@/lib/api";
 import { Zap, FileText, BarChart2, GitCompare, Table } from "lucide-react";
+import { toast } from "sonner";
 
 interface ChatInterfaceProps {
     activeChat: ChatOut | null;
+    onChatCreated?: (chat: ChatOut) => void;
 }
 
 const SUGGESTIONS = [
@@ -18,7 +20,7 @@ const SUGGESTIONS = [
     { icon: Table, label: "Extract data tables" },
 ];
 
-export function ChatInterface({ activeChat }: ChatInterfaceProps) {
+export function ChatInterface({ activeChat, onChatCreated }: ChatInterfaceProps) {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState("");
     const [files, setFiles] = useState<File[]>([]);
@@ -31,6 +33,7 @@ export function ChatInterface({ activeChat }: ChatInterfaceProps) {
         setPrevChatId(activeChat?.id);
         setMessages([]);
         setInput("");
+        setFiles([]);
     }
 
     useEffect(() => {
@@ -43,11 +46,18 @@ export function ChatInterface({ activeChat }: ChatInterfaceProps) {
         if (activeChat?.id) {
             getMessagesApi(activeChat.id)
                 .then((data) => {
-                    const mappedMessages = data.map((m) => ({
-                        id: m.id,
-                        role: m.role as "user" | "assistant" | "system",
-                        content: m.content,
-                    }));
+                    const mappedMessages = data.map((m) => {
+                        let parsedAssets = undefined;
+                        if (m.metadata_json && m.metadata_json.assets) {
+                            parsedAssets = m.metadata_json.assets as { id: string; file_name: string; file_type: string; }[];
+                        }
+                        return {
+                            id: m.id,
+                            role: m.role as "user" | "assistant" | "system",
+                            content: m.content,
+                            assets: parsedAssets,
+                        };
+                    });
                     setMessages(mappedMessages);
                 })
                 .catch(console.error);
@@ -55,19 +65,63 @@ export function ChatInterface({ activeChat }: ChatInterfaceProps) {
     }, [activeChat?.id]);
 
     async function handleSend() {
-        if ((!input.trim() && files.length === 0) || !activeChat || isStreaming) return;
+        if ((!input.trim() && files.length === 0) || isStreaming) return;
+
+        setIsStreaming(true);
+
+        let currentChat = activeChat;
+        if (!currentChat) {
+            try {
+                const newTitle = input.trim() ? input.trim().slice(0, 30) : "New Chat";
+                currentChat = await createChatApi(newTitle);
+                window.history.replaceState({}, '', `/chat?id=${currentChat.id}`);
+                window.dispatchEvent(new Event('chatCreated'));
+                if (onChatCreated) onChatCreated(currentChat);
+            } catch (error) {
+                console.error("Failed to create chat", error);
+                toast.error("Failed to create chat. Please try again.");
+                setIsStreaming(false);
+                return;
+            }
+        }
+
+        // Upload files first
+        let uploadedFiles = 0;
+        const uploadedAssetsData: { id: string, file_name: string, file_type: string }[] = [];
+        
+        if (files.length > 0) {
+            try {
+                for (const file of files) {
+                    const assetOut = await uploadAssetApi(file);
+                    await attachAssetToChatApi(currentChat.id, assetOut.id);
+                    uploadedAssetsData.push({
+                        id: assetOut.id,
+                        file_name: assetOut.file_name,
+                        file_type: assetOut.file_type
+                    });
+                    uploadedFiles++;
+                }
+            } catch (error) {
+                console.error("File upload failed", error);
+                toast.error("Failed to upload files. Please try again.");
+                setIsStreaming(false);
+                return;
+            }
+        }
+
+        const finalInput = input || (uploadedFiles > 0 ? `[Attached ${uploadedFiles} file(s)]` : "");
 
         const userMessage: Message = {
             id: crypto.randomUUID(),
             role: "user",
-            content: input.trim(),
+            content: finalInput,
+            ...(uploadedAssetsData.length > 0 ? { assets: uploadedAssetsData } : {})
         };
 
         const allMessages = [...messages, userMessage];
         setMessages(allMessages);
         setInput("");
         setFiles([]);
-        setIsStreaming(true);
 
         const aiMessageId = crypto.randomUUID();
         setMessages((prev) => [...prev, { id: aiMessageId, role: "assistant", content: "" }]);
@@ -82,7 +136,11 @@ export function ChatInterface({ activeChat }: ChatInterfaceProps) {
                     "Content-Type": "application/json",
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
-                body: JSON.stringify({ messages: allMessages, chatId: activeChat.id }),
+                body: JSON.stringify({ 
+                    messages: allMessages, 
+                    chatId: currentChat.id,
+                    metadata_json: uploadedAssetsData.length > 0 ? { assets: uploadedAssetsData } : undefined
+                }),
                 signal: abortControllerRef.current.signal,
             });
 
@@ -151,9 +209,8 @@ export function ChatInterface({ activeChat }: ChatInterfaceProps) {
                         <ChatInput
                             input={input}
                             onInputChange={setInput}
-                            onSubmit={() => {}}
-                            loading={false}
-                            disabled={true}
+                            onSubmit={handleSend}
+                            loading={isStreaming}
                             files={files}
                             onFilesChange={setFiles}
                         />

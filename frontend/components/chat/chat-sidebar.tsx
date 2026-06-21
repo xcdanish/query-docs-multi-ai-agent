@@ -13,7 +13,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { createChatApi, deleteChatApi, getChatsApi, getMeApi, ChatOut, UserOut } from "@/lib/api";
+import { createChatApi, deleteChatApi, getChatsApi, getMeApi, updateChatApi, ChatOut, UserOut } from "@/lib/api";
 import { removeToken } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import {
@@ -35,7 +35,7 @@ import {
 
 interface ChatSidebarProps {
     activeChatId: string | null;
-    onSelectChat: (chat: ChatOut) => void;
+    onSelectChat: (chat: ChatOut | null) => void;
     isCollapsed: boolean;
     onToggleCollapse: () => void;
 }
@@ -51,35 +51,94 @@ export function ChatSidebar({
     const [chats, setChats] = useState<ChatOut[]>([]);
     const [creating, setCreating] = useState(false);
     const [currentUser, setCurrentUser] = useState<UserOut | null>(null);
+    const [editingChatId, setEditingChatId] = useState<string | null>(null);
+    const [editTitle, setEditTitle] = useState("");
+
+    const handleSelectChat = (chat: ChatOut | null) => {
+        onSelectChat(chat);
+        if (chat) {
+            window.history.pushState({}, '', `/chat?id=${chat.id}`);
+        } else {
+            window.history.pushState({}, '', `/chat`);
+        }
+    };
 
     useEffect(() => {
-        getChatsApi()
-            .then(setChats)
-            .catch(() => toast.error("Failed to load chats"));
+        const loadChats = () => {
+            getChatsApi()
+                .then((loadedChats) => {
+                    setChats(loadedChats);
+                    
+                    const params = new URLSearchParams(window.location.search);
+                    const chatIdFromUrl = params.get("id");
+                    
+                    if (chatIdFromUrl) {
+                        const foundChat = loadedChats.find((c) => c.id === chatIdFromUrl);
+                        if (foundChat) {
+                            handleSelectChat(foundChat);
+                            return;
+                        }
+                    }
+                    
+                    // Auto-select the first chat if none selected or invalid ID
+                    if (loadedChats.length > 0 && !chatIdFromUrl) {
+                        handleSelectChat(loadedChats[0]);
+                    }
+                })
+                .catch(() => toast.error("Failed to load chats"));
+        };
+
+        loadChats();
+
+        const handleChatCreated = () => {
+            loadChats();
+        };
+        window.addEventListener('chatCreated', handleChatCreated);
 
         getMeApi()
             .then(setCurrentUser)
             .catch(() => {
                 /* silent */
             });
+
+        return () => window.removeEventListener('chatCreated', handleChatCreated);
     }, []);
 
-    async function handleNewChat() {
-        setCreating(true);
-        try {
-            const newChat = await createChatApi("New Chat");
-            setChats((prev) => [newChat, ...prev]);
-            onSelectChat(newChat);
-        } catch {
-            toast.error("Failed to create chat");
-        } finally {
-            setCreating(false);
-        }
+    function handleNewChat() {
+        handleSelectChat(null);
     }
 
-    function handleRenameChat(e: React.MouseEvent, chatId: string) {
+    function handleRenameChat(e: React.MouseEvent, chatId: string, currentTitle: string) {
         e.stopPropagation();
-        toast.info("Rename feature coming soon!");
+        setEditingChatId(chatId);
+        setEditTitle(currentTitle);
+    }
+
+    async function submitRename() {
+        if (!editingChatId) return;
+        const newTitle = editTitle.trim();
+        const currentChat = chats.find(c => c.id === editingChatId);
+        
+        if (newTitle && currentChat && newTitle !== currentChat.title) {
+            try {
+                const updatedChat = await updateChatApi(editingChatId, newTitle);
+                setChats((prev) => prev.map((c) => c.id === editingChatId ? updatedChat : c));
+                if (activeChatId === editingChatId) {
+                    onSelectChat(updatedChat);
+                }
+            } catch {
+                toast.error("Failed to rename chat");
+            }
+        }
+        setEditingChatId(null);
+    }
+
+    function handleRenameKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+        if (e.key === "Enter") {
+            submitRename();
+        } else if (e.key === "Escape") {
+            setEditingChatId(null);
+        }
     }
 
     async function handleDeleteChat(e: React.MouseEvent, chatId: string) {
@@ -189,7 +248,7 @@ export function ChatSidebar({
                         chats.map((chat) => (
                             <div
                                 key={chat.id}
-                                onClick={() => onSelectChat(chat)}
+                                onClick={() => handleSelectChat(chat)}
                                 title={isCollapsed ? chat.title : undefined}
                                 className={cn(
                                     "group flex cursor-pointer items-center justify-between rounded-lg text-[13px] transition-all duration-100",
@@ -199,15 +258,30 @@ export function ChatSidebar({
                                     isCollapsed ? "h-10 w-10 justify-center" : "px-3 py-2"
                                 )}
                             >
-                                <div
-                                    className={cn(
-                                        "flex min-w-0 items-center gap-2",
-                                        isCollapsed && "justify-center"
-                                    )}
-                                >
-                                    <MessageSquare className="h-3.5 w-3.5 shrink-0 opacity-70" />
-                                    {!isCollapsed && <span className="truncate">{chat.title}</span>}
-                                </div>
+                                    <div
+                                        className={cn(
+                                            "flex min-w-0 flex-1 items-center gap-2",
+                                            isCollapsed && "justify-center"
+                                        )}
+                                    >
+                                        <MessageSquare className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                                        {!isCollapsed && (
+                                            editingChatId === chat.id ? (
+                                                <input
+                                                    type="text"
+                                                    value={editTitle}
+                                                    onChange={(e) => setEditTitle(e.target.value)}
+                                                    onBlur={submitRename}
+                                                    onKeyDown={handleRenameKeyDown}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    autoFocus
+                                                    className="w-full bg-transparent outline-none border-b border-[#aaa] dark:border-[#555] text-[13px] text-[#111] dark:text-[#f0f0f0]"
+                                                />
+                                            ) : (
+                                                <span className="truncate">{chat.title}</span>
+                                            )
+                                        )}
+                                    </div>
                                 {!isCollapsed && (
                                     <DropdownMenu>
                                         <DropdownMenuTrigger
@@ -222,7 +296,7 @@ export function ChatSidebar({
                                             className="w-36 rounded-xl border-[#e5e5e5] bg-white shadow-md dark:border-[#333] dark:bg-[#1a1a1a]"
                                         >
                                             <DropdownMenuItem
-                                                onClick={(e) => handleRenameChat(e, chat.id)}
+                                                onClick={(e) => handleRenameChat(e, chat.id, chat.title)}
                                                 className="flex cursor-pointer items-center gap-2 text-[13px] text-[#444] hover:bg-[#f5f5f5] hover:text-[#111] dark:text-[#ccc] dark:hover:bg-[#222] dark:hover:text-white"
                                             >
                                                 <Pencil className="h-3.5 w-3.5" />
