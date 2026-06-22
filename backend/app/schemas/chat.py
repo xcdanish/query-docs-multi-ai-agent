@@ -17,3 +17,7 @@ class ChatOut(ChatBase):
 
     class Config:
         from_attributes = True
+
+class ChatStreamRequest(BaseModel):
+    message: str
+    chat_id: UUID

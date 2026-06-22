@@ -1,12 +1,14 @@
 from app.ai.llms.ollama import get_ollama_model
 from langchain_core.language_models.chat_models import BaseChatModel
 
-# Model mapping based on the sprint requirements
+# Model mapping — sabse fast local model for quick responses
+# qwen3:8b = slow (2-5 min), qwen2.5-coder:1.5b = fast (5-15 sec)
 AGENT_MODEL_MAPPING = {
-    "supervisor": "qwen3:8b",
-    "knowledge": "qwen3:8b",
-    "research": "qwen3:8b",
+    "supervisor":  "qwen2.5:3b",
+    "knowledge":   "qwen2.5:3b",
+    "research":    "qwen2.5:3b",
     "engineering": "qwen2.5-coder:1.5b",
+    "vision":      "minicpm-v:8b",
 }
 
 def get_llm(agent_name: str) -> BaseChatModel:

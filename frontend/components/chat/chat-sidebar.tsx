@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -53,6 +53,9 @@ export function ChatSidebar({
     const [currentUser, setCurrentUser] = useState<UserOut | null>(null);
     const [editingChatId, setEditingChatId] = useState<string | null>(null);
     const [editTitle, setEditTitle] = useState("");
+    const [animatingTitle, setAnimatingTitle] = useState<{ id: string, title: string, currentText: string } | null>(null);
+    // Track whether user intentionally clicked "New Chat" — prevents auto-select from overriding
+    const newChatModeRef = useRef(false);
 
     const handleSelectChat = (chat: ChatOut | null) => {
         onSelectChat(chat);
@@ -64,14 +67,15 @@ export function ChatSidebar({
     };
 
     useEffect(() => {
-        const loadChats = () => {
+        // Initial load: respect URL param or auto-select first chat
+        const initialLoad = () => {
             getChatsApi()
                 .then((loadedChats) => {
                     setChats(loadedChats);
-                    
+
                     const params = new URLSearchParams(window.location.search);
                     const chatIdFromUrl = params.get("id");
-                    
+
                     if (chatIdFromUrl) {
                         const foundChat = loadedChats.find((c) => c.id === chatIdFromUrl);
                         if (foundChat) {
@@ -79,21 +83,29 @@ export function ChatSidebar({
                             return;
                         }
                     }
-                    
-                    // Auto-select the first chat if none selected or invalid ID
-                    if (loadedChats.length > 0 && !chatIdFromUrl) {
+
+                    // Auto-select first chat only on initial page load (not when user clicked New Chat)
+                    if (loadedChats.length > 0 && !chatIdFromUrl && !newChatModeRef.current) {
                         handleSelectChat(loadedChats[0]);
                     }
                 })
                 .catch(() => toast.error("Failed to load chats"));
         };
 
-        loadChats();
-
-        const handleChatCreated = () => {
-            loadChats();
+        // After a new chat is created: just refresh the list, don't change selection
+        const refreshChatsOnly = () => {
+            getChatsApi()
+                .then((loadedChats) => {
+                    setChats(loadedChats);
+                    // newChatModeRef stays false now since chat was created
+                    newChatModeRef.current = false;
+                })
+                .catch(() => toast.error("Failed to load chats"));
         };
-        window.addEventListener('chatCreated', handleChatCreated);
+
+        initialLoad();
+
+        window.addEventListener('chatCreated', refreshChatsOnly);
 
         getMeApi()
             .then(setCurrentUser)
@@ -101,10 +113,40 @@ export function ChatSidebar({
                 /* silent */
             });
 
-        return () => window.removeEventListener('chatCreated', handleChatCreated);
+        const handleAnimateTitle = (e: Event) => {
+            const customEvent = e as CustomEvent;
+            setAnimatingTitle({
+                id: customEvent.detail.chatId,
+                title: customEvent.detail.finalTitle,
+                currentText: ""
+            });
+        };
+        window.addEventListener('animateChatTitle', handleAnimateTitle);
+
+        return () => {
+            window.removeEventListener('chatCreated', refreshChatsOnly);
+            window.removeEventListener('animateChatTitle', handleAnimateTitle);
+        };
     }, []);
 
+    // Effect for the typing animation
+    useEffect(() => {
+        if (!animatingTitle || animatingTitle.currentText === animatingTitle.title) return;
+        
+        const timeout = setTimeout(() => {
+            setAnimatingTitle(prev => {
+                if (!prev) return null;
+                const nextText = prev.title.substring(0, prev.currentText.length + 1);
+                return { ...prev, currentText: nextText };
+            });
+        }, 30); // 30ms per character for fast typing effect
+        
+        return () => clearTimeout(timeout);
+    }, [animatingTitle]);
+
     function handleNewChat() {
+        // Mark that user intentionally wants a new chat — prevents auto-select
+        newChatModeRef.current = true;
         handleSelectChat(null);
     }
 
@@ -278,7 +320,16 @@ export function ChatSidebar({
                                                     className="w-full bg-transparent outline-none border-b border-[#aaa] dark:border-[#555] text-[13px] text-[#111] dark:text-[#f0f0f0]"
                                                 />
                                             ) : (
-                                                <span className="truncate">{chat.title}</span>
+                                                <span className="truncate">
+                                                    {animatingTitle?.id === chat.id ? (
+                                                        <>
+                                                            {animatingTitle.currentText}
+                                                            {animatingTitle.currentText !== animatingTitle.title && (
+                                                                <span className="inline-block w-1 h-3 ml-[1px] bg-black dark:bg-white animate-pulse" />
+                                                            )}
+                                                        </>
+                                                    ) : chat.title}
+                                                </span>
                                             )
                                         )}
                                     </div>
