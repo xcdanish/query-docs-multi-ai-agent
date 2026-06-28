@@ -221,3 +221,7 @@ backend/uploads/assets/*
 !backend/uploads/assets/.gitkeep
 
 docs/*
+
+.DS_Store
+*.DS_Store
+
