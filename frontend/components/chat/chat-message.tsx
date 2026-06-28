@@ -12,7 +12,9 @@ export interface Message {
     role: "user" | "assistant" | "system";
     content: string;
     assets?: { id: string, file_name: string, file_type: string }[];
+    metadata_json?: any;
 }
+
 
 interface ChatMessageProps {
     message: Message;
@@ -84,6 +86,33 @@ export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
                         <MarkdownMessage content={message.content + (isStreaming ? " ▍" : "")} />
                     )}
                 </div>
+
+                {/* Render sources if available in metadata_json */}
+                {!isStreaming && message.metadata_json?.sources && message.metadata_json.sources.length > 0 && (
+                    <div className="mt-2.5 mb-1.5 flex flex-wrap gap-1.5">
+                        {(() => {
+                            const uniqueSources: { source: string; page: number }[] = [];
+                            const seen = new Set<string>();
+                            message.metadata_json.sources.forEach((s: any) => {
+                                const key = `${s.source}-${s.page}`;
+                                if (!seen.has(key)) {
+                                    seen.add(key);
+                                    uniqueSources.push({ source: s.source, page: s.page });
+                                }
+                            });
+                            return uniqueSources.map((src, i) => (
+                                <div
+                                    key={i}
+                                    className="flex items-center gap-1.5 rounded-lg border border-[#e5e5e5] bg-white px-2.5 py-1 text-[11px] font-medium text-[#555] shadow-sm dark:border-[#2a2a2a] dark:bg-[#1a1a1a] dark:text-[#888]"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#10a37f]"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                    <span>{src.source.length > 30 ? `${src.source.slice(0, 30)}...` : src.source} (Page {src.page})</span>
+                                </div>
+                            ));
+                        })()}
+                    </div>
+                )}
+
 
                 {!isStreaming && message.content && (
                     <div className="mt-2 flex items-center gap-0.5 transition-opacity duration-150">
