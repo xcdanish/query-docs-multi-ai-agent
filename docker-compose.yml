@@ -54,6 +54,18 @@ services:
       ollama:
         condition: service_started
 
+  qdrant:
+    container_name: query-docs-qdrant
+    image: qdrant/qdrant:latest
+    restart: always
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - query_docs_qdrant_data:/qdrant/storage
+
 volumes:
   query_docs_postgres_data:
   query_docs_ollama_data:
+  query_docs_qdrant_data:
+
