@@ -1,8 +1,16 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes.main_routes import main_router
+from app.ai.vectorstore.qdrant import init_qdrant_collection
 
-app = FastAPI(title="QDAI v2")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Initialize Qdrant Collection
+    init_qdrant_collection()
+    yield
+
+app = FastAPI(title="QDAI v2", lifespan=lifespan)
 
 # Configure CORS
 app.add_middleware(
@@ -14,3 +22,4 @@ app.add_middleware(
 )
 
 app.include_router(main_router)
+

@@ -75,6 +75,7 @@ export function ChatInterface({ activeChat, onChatCreated }: ChatInterfaceProps)
                         role: m.role as "user" | "assistant" | "system",
                         content: m.content,
                         assets: parsedAssets,
+                        metadata_json: m.metadata_json,
                     };
                 });
                 setMessages(mappedMessages);

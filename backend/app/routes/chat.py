@@ -25,6 +25,8 @@ from app.models.document import Asset
 from app.ai.agents.supervisor import supervisor_node
 from app.ai.graph.nodes import engineering_node, knowledge_node, research_node, vision_node
 from app.ai.llms.provider_factory import get_llm, AGENT_MODEL_MAPPING
+from app.ai.rag.retrieval import retrieve_context
+
 
 router = APIRouter(prefix="/chat", tags=["Chats"])
 
@@ -135,14 +137,16 @@ async def chat_stream(
     True streaming: supervisor decides agent first, then agent streams
     tokens directly from Ollama as they are generated.
     """
-    # 1. Verify chat belongs to user
-    get_chat_query = select(Chat).where(
+    # 1. Verify chat belongs to user and load assets
+    from sqlalchemy.orm import selectinload
+    get_chat_query = select(Chat).options(selectinload(Chat.assets)).where(
         (Chat.id == request.chat_id) & (Chat.user_id == current_user.id)
     )
     result = await db.execute(get_chat_query)
     chat = result.scalars().first()
     if not chat:
         raise NotFoundException("Chat not found or unauthorized")
+
 
     # 2. Get last N messages from DB (keep context short for speed)
     query = (
@@ -215,13 +219,40 @@ async def chat_stream(
     model_name = AGENT_MODEL_MAPPING.get(agent_name, AGENT_MODEL_MAPPING["research"])
     llm = get_llm(agent_name)
 
-    agent_prompts = {
-        "engineering": "You are the Engineering Agent. Answer code, debugging, and programming questions concisely.",
-        "knowledge":   "You are the Knowledge Agent. Answer questions about documents and knowledge bases concisely.",
-        "research":    "You are the Research Agent. Answer general, research, or comparison questions concisely.",
-        "vision":      "You are the Vision Agent. Analyze visual requests, images, and user interfaces carefully.",
-    }
-    system_prompt = SystemMessage(content=agent_prompts.get(agent_name, agent_prompts["research"]))
+    # Determine query text from history for RAG lookup
+    query_text = ""
+    if db_messages:
+        for msg in reversed(db_messages):
+            if msg.role == "user":
+                query_text = msg.content
+                break
+
+    context_chunks = []
+
+    # Build system prompt content dynamically
+    if agent_name == "knowledge":
+        asset_ids = [asset.id for asset in chat.assets]
+        # Perform retrieval
+        context_chunks = retrieve_context(query_text, current_user.id, asset_ids=asset_ids)
+        
+        context_str = ""
+        if context_chunks:
+            context_str = "\n".join([f"- Page {c['page']} from {c['source']}: {c['text']}" for c in context_chunks])
+            
+        system_prompt_content = "You are the Knowledge Agent. Answer questions about documents and knowledge bases concisely.\n"
+        if context_str:
+            system_prompt_content += f"\nRelevant context info from documents:\n{context_str}\n\nBased ONLY on the context information above, answer the user's question. If the answer is not in the context, politely state that the information is not in the uploaded documents."
+        else:
+            system_prompt_content += "\nNote: No documents are linked or no matching information was found in the linked documents, so answer to the best of your ability and remind the user to upload/link documents."
+    else:
+        agent_prompts = {
+            "engineering": "You are the Engineering Agent. Answer code, debugging, and programming questions concisely.",
+            "research":    "You are the Research Agent. Answer general, research, or comparison questions concisely.",
+            "vision":      "You are the Vision Agent. Analyze visual requests, images, and user interfaces carefully.",
+        }
+        system_prompt_content = agent_prompts.get(agent_name, agent_prompts["research"])
+
+    system_prompt = SystemMessage(content=system_prompt_content)
     if agent_name != "vision":
         clean_history = []
         for msg in history_messages:
@@ -232,7 +263,16 @@ async def chat_stream(
                 clean_history.append(msg)
         input_messages = [system_prompt] + clean_history
     else:
+
         input_messages = [system_prompt] + history_messages
+
+    # Map UUID-based source filenames to original uploaded filenames
+    asset_name_map = {}
+    for asset in chat.assets:
+        asset_name_map[str(asset.id)] = asset.file_name
+        if asset.file_path:
+            uuid_name = os.path.basename(asset.file_path)
+            asset_name_map[uuid_name] = asset.file_name
 
     # 6. Collect full response while streaming to client
     collected_tokens: list[str] = []
@@ -249,17 +289,42 @@ async def chat_stream(
             collected_tokens.append(err)
             yield err.encode("utf-8")
 
+        # Append source references at the end of the stream for knowledge agent
+        if agent_name == "knowledge" and context_chunks:
+            sources_text = "\n\n**Sources:**\n"
+            unique_sources = {}
+            for c in context_chunks:
+                source_display = asset_name_map.get(c["source"], c["source"])
+                key = (source_display, c["page"])
+                unique_sources[key] = True
+            for source_file, page in unique_sources.keys():
+                sources_text += f"- Page {page} of `{source_file}`\n"
+                
+            collected_tokens.append(sources_text)
+            yield sources_text.encode("utf-8")
+
         # Save complete response to DB after streaming finishes
         full_response = "".join(collected_tokens)
         if full_response:
+            mapped_chunks = []
+            for c in context_chunks:
+                mapped_chunks.append({
+                    "text": c["text"],
+                    "page": c["page"],
+                    "source": asset_name_map.get(c["source"], c["source"]),
+                    "score": c["score"]
+                })
             new_message = Message(
                 chat_id=request.chat_id,
                 role="assistant",
                 content=full_response,
-                agent_name=agent_name
+                agent_name=agent_name,
+                metadata_json={"sources": mapped_chunks} if mapped_chunks else None
             )
             db.add(new_message)
             await db.commit()
+
+
 
     return StreamingResponse(
         token_stream(),
