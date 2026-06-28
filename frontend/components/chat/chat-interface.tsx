@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { ChatMessage, Message } from "./chat-message";
 import { ChatInput } from "./chat-input";
 import { getToken } from "@/lib/auth";
@@ -27,56 +27,90 @@ export function ChatInterface({ activeChat, onChatCreated }: ChatInterfaceProps)
     const [isStreaming, setIsStreaming] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
-    const [prevChatId, setPrevChatId] = useState<string | undefined>(undefined);
 
-    if (activeChat?.id !== prevChatId) {
-        setPrevChatId(activeChat?.id);
-        setMessages([]);
-        setInput("");
-        setFiles([]);
-    }
+    /**
+     * justCreatedChatIdRef — stored when we manually call createChatApi,
+     * so that in useEffect the messages do not reset (as they are already in the state).
+     */
+    const justCreatedChatIdRef = useRef<string | null>(null);
 
+    // ── Auto-scroll whenever messages update ──
     useEffect(() => {
         if (scrollRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
     }, [messages]);
 
+    // ── Reset/Load messages when active chat switches ──
     useEffect(() => {
-        if (activeChat?.id) {
-            getMessagesApi(activeChat.id)
-                .then((data) => {
-                    const mappedMessages = data.map((m) => {
-                        let parsedAssets = undefined;
-                        if (m.metadata_json && m.metadata_json.assets) {
-                            parsedAssets = m.metadata_json.assets as { id: string; file_name: string; file_type: string; }[];
-                        }
-                        return {
-                            id: m.id,
-                            role: m.role as "user" | "assistant" | "system",
-                            content: m.content,
-                            assets: parsedAssets,
-                        };
-                    });
-                    setMessages(mappedMessages);
-                })
-                .catch(console.error);
+        if (!activeChat?.id) {
+            // Welcome screen / New Chat mode — clear existing messages
+            setMessages([]);
+            setInput("");
+            setFiles([]);
+            return;
         }
+
+        // If this chat was just created, messages are already in state
+        // Do not reset — just clear the ref
+        if (justCreatedChatIdRef.current === activeChat.id) {
+            justCreatedChatIdRef.current = null;
+            return;
+        }
+
+        // Select existing chat — reset and fetch messages from API
+        setMessages([]);
+        setInput("");
+        setFiles([]);
+
+        getMessagesApi(activeChat.id)
+            .then((data) => {
+                const mappedMessages = data.map((m) => {
+                    let parsedAssets = undefined;
+                    if (m.metadata_json && m.metadata_json.assets) {
+                        parsedAssets = m.metadata_json.assets as { id: string; file_name: string; file_type: string }[];
+                    }
+                    return {
+                        id: m.id,
+                        role: m.role as "user" | "assistant" | "system",
+                        content: m.content,
+                        assets: parsedAssets,
+                    };
+                });
+                setMessages(mappedMessages);
+            })
+            .catch(console.error);
     }, [activeChat?.id]);
 
-    async function handleSend() {
+    const handleSend = useCallback(async () => {
         if ((!input.trim() && files.length === 0) || isStreaming) return;
 
         setIsStreaming(true);
 
+        // ── Step 1: Create chat if it does not exist ──
         let currentChat = activeChat;
         if (!currentChat) {
             try {
-                const newTitle = input.trim() ? input.trim().slice(0, 30) : "New Chat";
-                currentChat = await createChatApi(newTitle);
-                window.history.replaceState({}, '', `/chat?id=${currentChat.id}`);
-                window.dispatchEvent(new Event('chatCreated'));
-                if (onChatCreated) onChatCreated(currentChat);
+                const finalTitle = input.trim() ? input.trim().slice(0, 50) : "New Chat";
+                const newChat = await createChatApi(finalTitle);
+
+                // Save this ID so useEffect doesn't reset messages
+                justCreatedChatIdRef.current = newChat.id;
+
+                currentChat = newChat;
+
+                // Update URL
+                window.history.replaceState({}, "", `/chat?id=${newChat.id}`);
+
+                // Refresh sidebar (new chat will appear in the list)
+                window.dispatchEvent(new Event("chatCreated"));
+                // Trigger typing animation in the sidebar for the new chat
+                window.dispatchEvent(new CustomEvent("animateChatTitle", { 
+                    detail: { chatId: newChat.id, finalTitle } 
+                }));
+
+                // Notify parent (activeChat prop will be updated)
+                if (onChatCreated) onChatCreated(newChat);
             } catch (error) {
                 console.error("Failed to create chat", error);
                 toast.error("Failed to create chat. Please try again.");
@@ -85,10 +119,10 @@ export function ChatInterface({ activeChat, onChatCreated }: ChatInterfaceProps)
             }
         }
 
-        // Upload files first
+        // ── Step 2: Upload files ──
         let uploadedFiles = 0;
-        const uploadedAssetsData: { id: string, file_name: string, file_type: string }[] = [];
-        
+        const uploadedAssetsData: { id: string; file_name: string; file_type: string }[] = [];
+
         if (files.length > 0) {
             try {
                 for (const file of files) {
@@ -97,7 +131,7 @@ export function ChatInterface({ activeChat, onChatCreated }: ChatInterfaceProps)
                     uploadedAssetsData.push({
                         id: assetOut.id,
                         file_name: assetOut.file_name,
-                        file_type: assetOut.file_type
+                        file_type: assetOut.file_type,
                     });
                     uploadedFiles++;
                 }
@@ -111,35 +145,36 @@ export function ChatInterface({ activeChat, onChatCreated }: ChatInterfaceProps)
 
         const finalInput = input || (uploadedFiles > 0 ? `[Attached ${uploadedFiles} file(s)]` : "");
 
+        // ── Step 3: Show user message immediately ──
         const userMessage: Message = {
             id: crypto.randomUUID(),
             role: "user",
             content: finalInput,
-            ...(uploadedAssetsData.length > 0 ? { assets: uploadedAssetsData } : {})
+            ...(uploadedAssetsData.length > 0 ? { assets: uploadedAssetsData } : {}),
         };
 
-        const allMessages = [...messages, userMessage];
-        setMessages(allMessages);
+        const aiMessageId = crypto.randomUUID();
+        const aiPlaceholder: Message = { id: aiMessageId, role: "assistant", content: "" };
+
+        setMessages((prev) => [...prev, userMessage, aiPlaceholder]);
         setInput("");
         setFiles([]);
 
-        const aiMessageId = crypto.randomUUID();
-        setMessages((prev) => [...prev, { id: aiMessageId, role: "assistant", content: "" }]);
-
+        // ── Step 4: Stream AI response ──
         try {
             abortControllerRef.current = new AbortController();
             const token = getToken();
 
-            const response = await fetch("/api/chat", {
+            const response = await fetch("/api/ask", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
-                body: JSON.stringify({ 
-                    messages: allMessages, 
+                body: JSON.stringify({
+                    messages: [...messages, userMessage],
                     chatId: currentChat.id,
-                    metadata_json: uploadedAssetsData.length > 0 ? { assets: uploadedAssetsData } : undefined
+                    metadata_json: uploadedAssetsData.length > 0 ? { assets: uploadedAssetsData } : undefined,
                 }),
                 signal: abortControllerRef.current.signal,
             });
@@ -161,6 +196,7 @@ export function ChatInterface({ activeChat, onChatCreated }: ChatInterfaceProps)
             }
         } catch (err: unknown) {
             if (err instanceof Error && err.name !== "AbortError") {
+                toast.error("Something went wrong. Please try again.");
                 setMessages((prev) =>
                     prev.map((msg) =>
                         msg.id === aiMessageId
@@ -173,8 +209,9 @@ export function ChatInterface({ activeChat, onChatCreated }: ChatInterfaceProps)
             setIsStreaming(false);
             abortControllerRef.current = null;
         }
-    }
+    }, [activeChat, input, files, isStreaming, messages, onChatCreated]);
 
+    // ── Welcome Screen (activeChat null) ──
     if (!activeChat) {
         return (
             <div className="flex flex-1 flex-col items-center justify-center bg-[#fafafa] px-4 pb-16 dark:bg-[#111111]">
@@ -187,10 +224,10 @@ export function ChatInterface({ activeChat, onChatCreated }: ChatInterfaceProps)
                         How can I help you today?
                     </h2>
                     <p className="mb-8 text-center text-sm text-[#888] dark:text-[#666]">
-                        Select a conversation or start a new one.
+                        Start a new conversation or select one from the sidebar.
                     </p>
 
-                    {/* Suggestions */}
+                    {/* Suggestion chips */}
                     <div className="mb-6 grid w-full grid-cols-2 gap-2">
                         {SUGGESTIONS.map(({ icon: Icon, label }) => (
                             <button
@@ -204,7 +241,7 @@ export function ChatInterface({ activeChat, onChatCreated }: ChatInterfaceProps)
                         ))}
                     </div>
 
-                    {/* Input on welcome screen */}
+                    {/* Input box on welcome screen */}
                     <div className="w-full">
                         <ChatInput
                             input={input}
@@ -220,16 +257,17 @@ export function ChatInterface({ activeChat, onChatCreated }: ChatInterfaceProps)
         );
     }
 
+    // ── Active Chat Screen ──
     return (
         <div className="flex min-h-0 flex-1 flex-col bg-[#fafafa] dark:bg-[#111111]">
-            {/* Minimal top bar */}
+            {/* Top bar — chat title */}
             <div className="flex h-12 shrink-0 items-center justify-center border-b border-[#eee] dark:border-[#1e1e1e]">
                 <p className="text-[13px] font-medium text-[#888] dark:text-[#555]">
                     {activeChat.title}
                 </p>
             </div>
 
-            {/* Messages */}
+            {/* Messages area */}
             <div ref={scrollRef} className="flex-1 overflow-y-auto">
                 <div className="mx-auto max-w-3xl py-8">
                     {messages.length === 0 ? (
@@ -256,7 +294,7 @@ export function ChatInterface({ activeChat, onChatCreated }: ChatInterfaceProps)
                 </div>
             </div>
 
-            {/* Input */}
+            {/* Input box */}
             <div className="mx-auto w-full max-w-3xl">
                 <ChatInput
                     input={input}

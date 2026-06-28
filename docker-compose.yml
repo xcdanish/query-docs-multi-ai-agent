@@ -10,10 +10,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      # Mapping to 5432 on host as per backend/.env
       - "5432:5432"
     volumes:
-      # This named volume ensures data persists even if the container stops/restarts
       - query_docs_postgres_data:/var/lib/postgresql/data
     command: >
       postgres
@@ -27,6 +25,35 @@ services:
       interval: 10s
       retries: 5
 
+  ollama:
+    container_name: query-docs-ollama
+    image: ollama/ollama:latest
+    restart: always
+    ports:
+      - "11434:11434"
+    volumes:
+      - query_docs_ollama_data:/root/.ollama
+
+  backend:
+    container_name: query-docs-backend
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "8080:8080"
+    env_file:
+      - backend/.env
+    environment:
+      - DB_HOST=db
+      - OLLAMA_HOST=ollama
+      - OLLAMA_BASE_URL=http://ollama:11434
+    depends_on:
+      db:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+
 volumes:
-  # Define the named volume for persistence
   query_docs_postgres_data:
+  query_docs_ollama_data:

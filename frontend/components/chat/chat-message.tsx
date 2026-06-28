@@ -5,6 +5,7 @@ import { Bot, Copy, ThumbsUp, ThumbsDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { toast } from "sonner";
+import { MarkdownMessage } from "./markdown-message";
 
 export interface Message {
     id: string;
@@ -72,15 +73,20 @@ export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
             </Avatar>
 
             <div className="min-w-0 flex-1">
-                <div className="text-[14px] leading-[1.75] whitespace-pre-wrap text-[#1a1a1a] dark:text-[#e8e8e8]">
-                    {message.content}
-                    {isStreaming && (
-                        <span className="ml-0.5 inline-block h-[15px] w-[2px] animate-[blink_0.7s_step-end_infinite] bg-[#10a37f] align-middle" />
+                <div className="text-[14px] leading-relaxed text-[#0d0d0d] dark:text-[#ececec] max-w-3xl w-full">
+                    {!message.content && isStreaming ? (
+                        <div className="flex items-center h-[24.5px] gap-1">
+                            <span className="h-1.5 w-1.5 rounded-full bg-[#10a37f] animate-bounce [animation-delay:-0.3s]"></span>
+                            <span className="h-1.5 w-1.5 rounded-full bg-[#10a37f] animate-bounce [animation-delay:-0.15s]"></span>
+                            <span className="h-1.5 w-1.5 rounded-full bg-[#10a37f] animate-bounce"></span>
+                        </div>
+                    ) : (
+                        <MarkdownMessage content={message.content + (isStreaming ? " ▍" : "")} />
                     )}
                 </div>
 
                 {!isStreaming && message.content && (
-                    <div className="mt-2 flex items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                    <div className="mt-2 flex items-center gap-0.5 transition-opacity duration-150">
                         <button
                             onClick={handleCopy}
                             className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] text-[#999] transition-all hover:bg-[#f0f0f0] hover:text-[#333] dark:text-[#555] dark:hover:bg-[#1e1e1e] dark:hover:text-[#ccc]"
