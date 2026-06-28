@@ -1,23 +1,38 @@
 import os
 import uuid
-from fastapi import APIRouter, Depends, UploadFile, File, status
+import asyncio
+from fastapi import APIRouter, Depends, UploadFile, File, status, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from app.db.database import get_db
+from app.db.database import get_db, AsyncSessionLocal
 from app.models.user import User
 from app.models.document import Asset
 from app.auth.dependencies import get_current_user
 from app.schemas.asset import AssetOut, AssetResponse, AssetListResponse
 from app.utils.exceptions import NotFoundException, BadRequestException
+from app.ai.rag.indexing import index_document
 
 router = APIRouter(prefix="/assets", tags=["Assets"])
 
 UPLOAD_DIR = "uploads/assets"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+async def index_asset_task(file_path: str, asset_id: uuid.UUID, user_id: uuid.UUID):
+    """
+    Background task to run custom RAG indexing and update database status.
+    """
+    success = await asyncio.to_thread(index_document, file_path, asset_id, user_id)
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(Asset).filter(Asset.id == asset_id))
+        asset = result.scalar_one_or_none()
+        if asset:
+            asset.status = "READY" if success else "FAILED"
+            await session.commit()
+
 @router.post("/upload", response_model=AssetResponse, status_code=status.HTTP_201_CREATED)
 async def upload_asset(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -35,24 +50,28 @@ async def upload_asset(
         
         file_size = len(contents)
 
-        # Create Asset record in DB
+        # Create Asset record in DB with PROCESSING status
         asset = Asset(
             user_id=current_user.id,
             file_name=file.filename or "unknown",
             file_type=file.content_type or "application/octet-stream",
             file_path=file_path,
             file_size=file_size,
-            status="READY"
+            status="PROCESSING"
         )
         db.add(asset)
         await db.commit()
         await db.refresh(asset)
 
+        # Trigger background task for indexing
+        background_tasks.add_task(index_asset_task, file_path, asset.id, current_user.id)
+
         return AssetResponse(
             status="success",
-            message="Asset uploaded successfully",
+            message="Asset upload started and is processing in the background",
             data=AssetOut.model_validate(asset)
         )
+
     except Exception as e:
         await db.rollback()
         raise BadRequestException(f"Failed to upload asset: {str(e)}")
