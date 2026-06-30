@@ -13,8 +13,8 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { createChatApi, deleteChatApi, getChatsApi, getMeApi, updateChatApi, ChatOut, UserOut } from "@/lib/api";
-import { removeToken } from "@/lib/auth";
+import { createChatApi, deleteChatApi, getChatsApi, getMeApi, updateChatApi, logoutApi, ChatOut, UserOut } from "@/lib/api";
+import { removeToken, getRefreshToken } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import {
     MessageSquarePlus,
@@ -193,7 +193,15 @@ export function ChatSidebar({
         }
     }
 
-    function handleLogout() {
+    async function handleLogout() {
+        const token = getRefreshToken();
+        if (token) {
+            try {
+                await logoutApi(token);
+            } catch (err) {
+                console.error("Failed to revoke token", err);
+            }
+        }
         removeToken();
         router.push("/login");
     }
