@@ -53,8 +53,5 @@ workflow.add_edge("knowledge", END)
 workflow.add_edge("research", END)
 workflow.add_edge("vision", END)
 
-from langgraph.checkpoint.memory import MemorySaver
-
-# Compile workflow with memory checkpointer
-memory = MemorySaver()
-graph_app = workflow.compile(checkpointer=memory)
+# Compile workflow
+graph_app = workflow.compile()

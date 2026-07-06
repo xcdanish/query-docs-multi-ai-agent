@@ -54,6 +54,28 @@ services:
       ollama:
         condition: service_started
 
+  langgraph-dev:
+    container_name: query-docs-langgraph-dev
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: langgraph dev --host 0.0.0.0 --port 2024 --config /app/langgraph.json
+    ports:
+      - "2024:2024"
+    volumes:
+      - ./backend:/app
+    env_file:
+      - backend/.env
+    environment:
+      - DB_HOST=db
+      - OLLAMA_HOST=ollama
+      - OLLAMA_BASE_URL=http://ollama:11434
+    depends_on:
+      db:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+
   qdrant:
     container_name: query-docs-qdrant
     image: qdrant/qdrant:latest

@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "query_docs": "app.ai.graph.workflow:graph_app"
+  },
+  "env": ".env"
+}

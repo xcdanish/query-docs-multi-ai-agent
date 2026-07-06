@@ -6,6 +6,8 @@ export const API_URLS = {
         login: "/api/auth/login",
         signup: "/api/auth/signup",
         me: "/api/auth/me",
+        refresh: "/api/auth/refresh",
+        logout: "/api/auth/logout",
     },
     chat: {
         get: "/api/chat/get",

@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime, timedelta, timezone
 import jwt
 from typing import Optional
@@ -14,3 +15,8 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
+
+def create_refresh_token() -> str:
+    """Generates a secure random hex string to be used as a refresh token."""
+    return secrets.token_hex(32)
+

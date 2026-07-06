@@ -21,7 +21,7 @@ export default function LoginPage() {
         setLoading(true);
         try {
             const data = await loginApi(username, password);
-            setToken(data.access_token);
+            setToken(data.access_token, data.refresh_token);
             router.push("/chat");
         } catch {
             toast.error("Invalid username or password");

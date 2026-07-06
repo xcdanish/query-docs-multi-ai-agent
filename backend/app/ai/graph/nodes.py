@@ -8,6 +8,12 @@ from app.ai.graph.state import AgentState
 from app.ai.rag.retrieval import retrieve_context
 from langchain_core.messages import AIMessage, SystemMessage
 
+# Import centralized prompts
+from app.ai.prompts.engineering import SYSTEM_PROMPT as ENGINEERING_SYSTEM_PROMPT
+from app.ai.prompts.research import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT
+from app.ai.prompts.vision import SYSTEM_PROMPT as VISION_SYSTEM_PROMPT
+from app.ai.prompts.knowledge import get_knowledge_prompt
+
 def engineering_node(state: AgentState) -> dict:
     """
     Node that processes programming/coding queries using qwen2.5-coder:1.5b.
@@ -15,7 +21,7 @@ def engineering_node(state: AgentState) -> dict:
     llm = get_llm("engineering")
     messages = state.get("messages", [])
     
-    system_prompt = SystemMessage(content="You are the Engineering Agent. Answer code reviews, debugging, and code writing requests professionally.")
+    system_prompt = SystemMessage(content=ENGINEERING_SYSTEM_PROMPT)
     input_messages = [system_prompt] + messages
     
     response = llm.invoke(input_messages)
@@ -66,11 +72,7 @@ async def knowledge_node(state: AgentState) -> dict:
     if context_chunks:
         context_str = "\n".join([f"- Page {c['page']} from {c['source']}: {c['text']}" for c in context_chunks])
         
-    system_prompt_content = "You are the Knowledge Agent. Answer questions about documents and knowledge bases concisely.\n"
-    if context_str:
-        system_prompt_content += f"\nRelevant context info from documents:\n{context_str}\n\nBased ONLY on the context information above, answer the user's question. If the answer is not in the context, politely state that the information is not in the uploaded documents."
-    else:
-        system_prompt_content += "\nNote: No documents are linked or no matching information was found in the linked documents, so answer to the best of your ability and remind the user to upload/link documents."
+    system_prompt_content = get_knowledge_prompt(context_str)
         
     system_prompt = SystemMessage(content=system_prompt_content)
     input_messages = [system_prompt] + messages
@@ -92,8 +94,6 @@ async def knowledge_node(state: AgentState) -> dict:
         "messages": [AIMessage(content=content, name="knowledge")]
     }
 
-
-
 def research_node(state: AgentState) -> dict:
     """
     Node that processes general comparisons/research queries using qwen3:8b.
@@ -101,7 +101,7 @@ def research_node(state: AgentState) -> dict:
     llm = get_llm("research")
     messages = state.get("messages", [])
     
-    system_prompt = SystemMessage(content="You are the Research Agent. Answer comparison, deep reasoning, or general analysis queries.")
+    system_prompt = SystemMessage(content=RESEARCH_SYSTEM_PROMPT)
     input_messages = [system_prompt] + messages
     
     response = llm.invoke(input_messages)
@@ -116,11 +116,12 @@ def vision_node(state: AgentState) -> dict:
     llm = get_llm("vision")
     messages = state.get("messages", [])
     
-    system_prompt = SystemMessage(content="You are the Vision Agent. Analyze images, user interfaces, and answer visually-related queries.")
+    system_prompt = SystemMessage(content=VISION_SYSTEM_PROMPT)
     input_messages = [system_prompt] + messages
     
     response = llm.invoke(input_messages)
     return {
         "messages": [AIMessage(content=response.content, name="vision")]
     }
+
 

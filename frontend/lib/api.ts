@@ -21,8 +21,24 @@ export async function loginApi(username: string, password: string) {
         isFormData: true,
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
     });
-    return response as { access_token: string; token_type: string };
+    return response as { access_token: string; refresh_token: string; token_type: string };
 }
+
+export async function refreshApi(refreshToken: string) {
+    const response = await fetchApi(API_URLS.auth.refresh, {
+        method: "POST",
+        bodyData: { refresh_token: refreshToken },
+    });
+    return response as { access_token: string; refresh_token: string; token_type: string };
+}
+
+export async function logoutApi(refreshToken: string) {
+    return fetchApi(API_URLS.auth.logout, {
+        method: "POST",
+        bodyData: { refresh_token: refreshToken },
+    });
+}
+
 
 export async function signupApi(payload: {
     name: string;

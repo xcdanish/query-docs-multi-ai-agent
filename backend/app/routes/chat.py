@@ -23,6 +23,10 @@ import pillow_avif
 
 from app.models.document import Asset
 from app.ai.agents.supervisor import supervisor_node
+from app.ai.prompts.engineering import SYSTEM_PROMPT as ENGINEERING_SYSTEM_PROMPT
+from app.ai.prompts.research import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT
+from app.ai.prompts.vision import SYSTEM_PROMPT as VISION_SYSTEM_PROMPT
+from app.ai.prompts.knowledge import get_knowledge_prompt
 from app.ai.graph.nodes import engineering_node, knowledge_node, research_node, vision_node
 from app.ai.llms.provider_factory import get_llm, AGENT_MODEL_MAPPING
 from app.ai.rag.retrieval import retrieve_context
@@ -239,16 +243,12 @@ async def chat_stream(
         if context_chunks:
             context_str = "\n".join([f"- Page {c['page']} from {c['source']}: {c['text']}" for c in context_chunks])
             
-        system_prompt_content = "You are the Knowledge Agent. Answer questions about documents and knowledge bases concisely.\n"
-        if context_str:
-            system_prompt_content += f"\nRelevant context info from documents:\n{context_str}\n\nBased ONLY on the context information above, answer the user's question. If the answer is not in the context, politely state that the information is not in the uploaded documents."
-        else:
-            system_prompt_content += "\nNote: No documents are linked or no matching information was found in the linked documents, so answer to the best of your ability and remind the user to upload/link documents."
+        system_prompt_content = get_knowledge_prompt(context_str)
     else:
         agent_prompts = {
-            "engineering": "You are the Engineering Agent. Answer code, debugging, and programming questions concisely.",
-            "research":    "You are the Research Agent. Answer general, research, or comparison questions concisely.",
-            "vision":      "You are the Vision Agent. Analyze visual requests, images, and user interfaces carefully.",
+            "engineering": ENGINEERING_SYSTEM_PROMPT,
+            "research":    RESEARCH_SYSTEM_PROMPT,
+            "vision":      VISION_SYSTEM_PROMPT,
         }
         system_prompt_content = agent_prompts.get(agent_name, agent_prompts["research"])
 
