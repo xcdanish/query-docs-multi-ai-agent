@@ -48,10 +48,14 @@ services:
       - DB_HOST=db
       - OLLAMA_HOST=ollama
       - OLLAMA_BASE_URL=http://ollama:11434
+      - QDRANT_HOST=qdrant
+      - HOST=0.0.0.0
     depends_on:
       db:
         condition: service_healthy
       ollama:
+        condition: service_started
+      qdrant:
         condition: service_started
 
   langgraph-dev:
@@ -70,10 +74,13 @@ services:
       - DB_HOST=db
       - OLLAMA_HOST=ollama
       - OLLAMA_BASE_URL=http://ollama:11434
+      - QDRANT_HOST=qdrant
     depends_on:
       db:
         condition: service_healthy
       ollama:
+        condition: service_started
+      qdrant:
         condition: service_started
 
   qdrant:
