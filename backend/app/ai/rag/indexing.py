@@ -39,32 +39,15 @@ def load_pdf_to_documents(file_path: str, file_name: str = None) -> list[Documen
             
     return documents
 
-def index_document(file_path: str, asset_id: uuid.UUID, user_id: uuid.UUID) -> bool:
+def index_document(file_path: str, asset_id: uuid.UUID, user_id: uuid.UUID, file_name: str = None) -> bool:
     """
-    Ingets a PDF document, splits it, generates embeddings, and uploads to Qdrant.
+    Ingests a PDF document, splits it, generates embeddings, and uploads to Qdrant.
     """
     try:
         logger.info(f"Starting ingestion for asset {asset_id} uploaded by user {user_id}")
         
-        # Resolve original filename from database for metadata
-        original_filename = os.path.basename(file_path)
-        try:
-            from app.db.database import AsyncSessionLocal
-            from app.models.document import Asset
-            from sqlalchemy import select
-            import asyncio
-            
-            async def get_asset_filename():
-                async with AsyncSessionLocal() as session:
-                    result = await session.execute(select(Asset).filter(Asset.id == asset_id))
-                    asset = result.scalar_one_or_none()
-                    return asset.file_name if asset else None
-                    
-            db_filename = asyncio.run(get_asset_filename())
-            if db_filename:
-                original_filename = db_filename
-        except Exception as db_err:
-            logger.warning(f"Could not retrieve original filename from DB for asset {asset_id}: {db_err}")
+        # Resolve original filename for metadata
+        original_filename = file_name or os.path.basename(file_path)
             
         # 1. Load documents
         raw_docs = load_pdf_to_documents(file_path, file_name=original_filename)
