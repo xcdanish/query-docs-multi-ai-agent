@@ -1,4 +1,7 @@
-export const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+export const BACKEND_URL =
+    typeof window === "undefined"
+        ? process.env.INTERNAL_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
+        : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 // All backend routes have /api prefix
 export const API_URLS = {

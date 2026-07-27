@@ -58,6 +58,22 @@ services:
       qdrant:
         condition: service_started
 
+  frontend:
+    container_name: query-docs-frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8080
+    restart: always
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - INTERNAL_BACKEND_URL=http://backend:8080
+    depends_on:
+      - backend
+
   langgraph-dev:
     container_name: query-docs-langgraph-dev
     build:
