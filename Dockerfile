@@ -12,6 +12,6 @@ RUN pip install --default-timeout=100 --no-cache-dir -r requirements.txt
 # Copy application code
 COPY backend/ .
 
-EXPOSE 8080
+EXPOSE 8005
 
 CMD ["python", "run.py"]

@@ -41,18 +41,39 @@ services:
       dockerfile: Dockerfile
     restart: always
     ports:
-      - "8080:8080"
+      - "8005:8005"
     env_file:
       - backend/.env
     environment:
       - DB_HOST=db
       - OLLAMA_HOST=ollama
       - OLLAMA_BASE_URL=http://ollama:11434
+      - QDRANT_HOST=qdrant
+      - HOST=0.0.0.0
+      - PORT=8005
     depends_on:
       db:
         condition: service_healthy
       ollama:
         condition: service_started
+      qdrant:
+        condition: service_started
+
+  frontend:
+    container_name: query-docs-frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8005
+    restart: always
+    ports:
+      - "3005:3005"
+    environment:
+      - PORT=3005
+      - INTERNAL_BACKEND_URL=http://backend:8005
+    depends_on:
+      - backend
 
   langgraph-dev:
     container_name: query-docs-langgraph-dev
@@ -70,10 +91,13 @@ services:
       - DB_HOST=db
       - OLLAMA_HOST=ollama
       - OLLAMA_BASE_URL=http://ollama:11434
+      - QDRANT_HOST=qdrant
     depends_on:
       db:
         condition: service_healthy
       ollama:
+        condition: service_started
+      qdrant:
         condition: service_started
 
   qdrant:

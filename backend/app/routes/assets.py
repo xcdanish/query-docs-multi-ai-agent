@@ -18,11 +18,11 @@ router = APIRouter(prefix="/assets", tags=["Assets"])
 UPLOAD_DIR = "uploads/assets"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-async def index_asset_task(file_path: str, asset_id: uuid.UUID, user_id: uuid.UUID):
+async def index_asset_task(file_path: str, asset_id: uuid.UUID, user_id: uuid.UUID, file_name: str = None):
     """
     Background task to run custom RAG indexing and update database status.
     """
-    success = await asyncio.to_thread(index_document, file_path, asset_id, user_id)
+    success = await asyncio.to_thread(index_document, file_path, asset_id, user_id, file_name)
     async with AsyncSessionLocal() as session:
         result = await session.execute(select(Asset).filter(Asset.id == asset_id))
         asset = result.scalar_one_or_none()
@@ -49,9 +49,11 @@ async def upload_asset(
             f.write(contents)
         
         file_size = len(contents)
+        asset_id = uuid.uuid4()
 
         # Create Asset record in DB with PROCESSING status
         asset = Asset(
+            id=asset_id,
             user_id=current_user.id,
             file_name=file.filename or "unknown",
             file_type=file.content_type or "application/octet-stream",
@@ -61,10 +63,9 @@ async def upload_asset(
         )
         db.add(asset)
         await db.commit()
-        await db.refresh(asset)
 
         # Trigger background task for indexing
-        background_tasks.add_task(index_asset_task, file_path, asset.id, current_user.id)
+        background_tasks.add_task(index_asset_task, file_path, asset.id, current_user.id, asset.file_name)
 
         return AssetResponse(
             status="success",

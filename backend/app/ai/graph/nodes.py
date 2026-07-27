@@ -14,6 +14,44 @@ from app.ai.prompts.research import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT
 from app.ai.prompts.vision import SYSTEM_PROMPT as VISION_SYSTEM_PROMPT
 from app.ai.prompts.knowledge import get_knowledge_prompt
 
+def sanitize_messages(messages, allow_images=False):
+    """
+    Removes unsupported block types (like 'file') from message content.
+    If allow_images is False, flattens all content into a single string.
+    """
+    sanitized = []
+    for msg in messages:
+        if isinstance(msg.content, list):
+            new_content = []
+            text_parts = []
+            for block in msg.content:
+                if isinstance(block, dict):
+                    if block.get("type") == "text":
+                        if allow_images:
+                            new_content.append(block)
+                        else:
+                            text_parts.append(block.get("text", ""))
+                    elif block.get("type") == "image_url" and allow_images:
+                        new_content.append(block)
+                elif isinstance(block, str):
+                    if allow_images:
+                        new_content.append(block)
+                    else:
+                        text_parts.append(block)
+            
+            final_content = new_content if allow_images else "\n".join(text_parts)
+            if not final_content and not allow_images:
+                final_content = " "
+                
+            try:
+                new_msg = msg.model_copy(update={"content": final_content})
+            except AttributeError:
+                new_msg = msg.copy(update={"content": final_content})
+            sanitized.append(new_msg)
+        else:
+            sanitized.append(msg)
+    return sanitized
+
 def engineering_node(state: AgentState) -> dict:
     """
     Node that processes programming/coding queries using qwen2.5-coder:1.5b.
@@ -22,7 +60,7 @@ def engineering_node(state: AgentState) -> dict:
     messages = state.get("messages", [])
     
     system_prompt = SystemMessage(content=ENGINEERING_SYSTEM_PROMPT)
-    input_messages = [system_prompt] + messages
+    input_messages = [system_prompt] + sanitize_messages(messages, allow_images=False)
     
     response = llm.invoke(input_messages)
     return {
@@ -40,8 +78,8 @@ async def knowledge_node(state: AgentState) -> dict:
     
     # Retrieve query text (last human message)
     query_text = ""
-    for msg in reversed(messages):
-        # LangChain BaseMessage classes have msg.type (like 'human')
+    sanitized_msgs = sanitize_messages(messages, allow_images=False)
+    for msg in reversed(sanitized_msgs):
         if getattr(msg, "type", "") == "human":
             query_text = msg.content
             break
@@ -75,7 +113,7 @@ async def knowledge_node(state: AgentState) -> dict:
     system_prompt_content = get_knowledge_prompt(context_str)
         
     system_prompt = SystemMessage(content=system_prompt_content)
-    input_messages = [system_prompt] + messages
+    input_messages = [system_prompt] + sanitized_msgs
     
     response = await llm.ainvoke(input_messages)
     content = response.content
@@ -102,7 +140,7 @@ def research_node(state: AgentState) -> dict:
     messages = state.get("messages", [])
     
     system_prompt = SystemMessage(content=RESEARCH_SYSTEM_PROMPT)
-    input_messages = [system_prompt] + messages
+    input_messages = [system_prompt] + sanitize_messages(messages, allow_images=False)
     
     response = llm.invoke(input_messages)
     return {
@@ -117,7 +155,7 @@ def vision_node(state: AgentState) -> dict:
     messages = state.get("messages", [])
     
     system_prompt = SystemMessage(content=VISION_SYSTEM_PROMPT)
-    input_messages = [system_prompt] + messages
+    input_messages = [system_prompt] + sanitize_messages(messages, allow_images=True)
     
     response = llm.invoke(input_messages)
     return {

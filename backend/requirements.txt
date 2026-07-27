@@ -33,6 +33,7 @@ langchain-community>=0.3.0
 langgraph>=0.2.60
 qdrant-client==1.13.2
 pypdf==5.1.0
-langgraph-cli[inmem]>=0.1.55
+langgraph-cli[inmem]>=0.4.30
+langgraph-api>=0.10.0
 Pillow>=10.0.0
-
+pillow-avif-plugin>=1.4.3

@@ -60,7 +60,11 @@ This system utilizes a multi-agent workflow where a routing supervisor coordinat
     ```
 *   **Vision Agent** - _Model: `minicpm-v:8b`_ | **Input:** Image & Text (Visual Analysis)
     ```bash
+    # Heavy model (requires 8-10GB RAM)
     docker exec -it query-docs-ollama ollama pull minicpm-v:8b
+    
+    # Alternative: Lightweight model (requires ~2GB RAM, use if OOM occurs)
+    docker exec -it query-docs-ollama ollama pull moondream:1.8b
     ```
 *   **Embeddings** - _Model: `nomic-embed-text`_ | **Input:** Text (Outputs Embeddings)
     ```bash
@@ -112,6 +116,18 @@ source venv/bin/activate
 ```bash
 python backend/run.py
 ```
+
+---
+
+## 🎨 Visualizing the AI Workflow (LangGraph Studio)
+
+The system runs a **LangGraph API server** inside Docker on port `2024`. You can visually test and debug the multi-agent workflow using LangChain's Studio.
+
+1. Ensure your Docker containers are running (`docker compose up -d`).
+2. Open your web browser and go to the following URL:
+   👉 **[https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024](https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024)**
+3. The Studio will connect to your local dev server.
+4. You can submit prompts in the "Input" section to see how the `Supervisor` agent routes requests to the specialized agents (`engineering`, `knowledge`, `research`, `vision`).
 
 ---
 
