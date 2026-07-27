@@ -41,7 +41,7 @@ services:
       dockerfile: Dockerfile
     restart: always
     ports:
-      - "8080:8080"
+      - "8005:8005"
     env_file:
       - backend/.env
     environment:
@@ -50,6 +50,7 @@ services:
       - OLLAMA_BASE_URL=http://ollama:11434
       - QDRANT_HOST=qdrant
       - HOST=0.0.0.0
+      - PORT=8005
     depends_on:
       db:
         condition: service_healthy
@@ -64,13 +65,13 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: http://localhost:8080
+        NEXT_PUBLIC_API_URL: http://localhost:8005
     restart: always
     ports:
-      - "4000:4000"
+      - "3005:3005"
     environment:
-      - PORT=4000
-      - INTERNAL_BACKEND_URL=http://backend:8080
+      - PORT=3005
+      - INTERNAL_BACKEND_URL=http://backend:8005
     depends_on:
       - backend
 

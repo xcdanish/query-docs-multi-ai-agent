@@ -13,7 +13,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # These are baked into the build at compile time (NEXT_PUBLIC_* vars)
-ARG NEXT_PUBLIC_API_URL=http://localhost:8080
+ARG NEXT_PUBLIC_API_URL=http://localhost:8005
 
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -38,8 +38,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
 USER nextjs
 
-EXPOSE 4000
-ENV PORT=4000
+EXPOSE 3005
+ENV PORT=3005
 ENV HOSTNAME=0.0.0.0
 
 CMD ["node", "server.js"]
