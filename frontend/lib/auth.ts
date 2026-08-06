@@ -14,7 +14,7 @@ export function getRefreshToken(): string | undefined {
 export function setToken(token: string, refreshToken?: string): void {
     // Access token expires in 15 minutes
     const in15Minutes = new Date(new Date().getTime() + 15 * 60 * 1000);
-    Cookies.set(TOKEN_KEY, token, { expires: in15Minutes, sameSite: "strict" });
+    Cookies.set(TOKEN_KEY, token, { expires: in15Minutes, path: "/", sameSite: "lax" });
     if (refreshToken) {
         setRefreshToken(refreshToken);
     }
@@ -22,12 +22,12 @@ export function setToken(token: string, refreshToken?: string): void {
 
 export function setRefreshToken(token: string): void {
     // Refresh token expires in 7 days
-    Cookies.set(REFRESH_TOKEN_KEY, token, { expires: 7, sameSite: "strict" });
+    Cookies.set(REFRESH_TOKEN_KEY, token, { expires: 7, path: "/", sameSite: "lax" });
 }
 
 export function removeToken(): void {
-    Cookies.remove(TOKEN_KEY);
-    Cookies.remove(REFRESH_TOKEN_KEY);
+    Cookies.remove(TOKEN_KEY, { path: "/" });
+    Cookies.remove(REFRESH_TOKEN_KEY, { path: "/" });
 }
 
 export function isAuthenticated(): boolean {

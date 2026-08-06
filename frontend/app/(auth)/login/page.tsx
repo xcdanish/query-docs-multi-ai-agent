@@ -22,7 +22,7 @@ export default function LoginPage() {
         try {
             const data = await loginApi(username, password);
             setToken(data.access_token, data.refresh_token);
-            router.push("/chat");
+            window.location.href = "/chat";
         } catch {
             toast.error("Invalid username or password");
         } finally {

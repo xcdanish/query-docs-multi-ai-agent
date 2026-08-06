@@ -12,10 +12,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="QDAI v2", lifespan=lifespan)
 
-# Configure CORS
+# Configure CORS - use allow_origin_regex only (not allow_origins=["*"])
+# because browsers reject allow_origins=["*"] when credentials are included
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[],
+    allow_origin_regex=r"https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
